@@ -161,18 +161,24 @@ void setup()
   // myRover.gps3.lon = 106.106 ; 
 }
 
-void MPU_task(void *pvParameters)
+void MPU_task(void *pvParameters) // Temuulen MPU 9250 iig 100ms zaitai utga avj 10 udaa utga ter toond 1 ees oor too bnu gdgiig shalgan draagiin tolov false - draagiin tolov, true baival dahiad 10 utga avna 
 {  // This is a task.
   xyzFloat gValue;
+  bool one = true ; // false uyd draagiin stage ruu shiljene 
 
   for (;;){ // A Task shall never return or exit.
     if(myRover.r_status==0){
-      gValue = myMPU9250.getGValues();
-      myRover.fall_accelerate = myMPU9250.getResultantG(gValue);
+      for(int i = 0 ; i < 10 ; i++){
+        gValue = myMPU9250.getGValues();
+        myRover.fall  _accelerate = myMPU9250.getResultantG(gValue);
 
-      if(myRover.fall_accelerate == 1){
-        myRover.r_status=1;
+        vTaskDelay(100 / portTick_PERIOD_MS) ;
+
+        if(myRover.fall_accelerate != 1) {
+          one = false ;
+        }
       }
+
       Serial.print("MPU_9250 g : ");
       Serial.println(myRover.fall_accelerate);
 
