@@ -152,6 +152,23 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(M1_ENB), encoderPulseA, RISING);
   attachInterrupt(digitalPinToInterrupt(M2_ENB), encoderPulseB, RISING);
 
+  //-------------------lat-----------------------------
+  myRover.gps1.lat = 47.91879; myRover.gps1.lon = 106.91733; 
+  myRover.gps3.lat = 47.91870; myRover.gps3.lon = 106.91785;  // uragshaa
+  myRover.gps3.lat = 47.91897; myRover.gps3.lon = 106.91781;  // hoishoo
+
+  // myRover.gps2.lat = 47.91884; myRover.gps2.lon = 106.91783; 
+
+  //-------------------long----------------------------
+
+  
+  
+  // myRover.gps1.lat = 47.91867; myRover.gps1.lon = 106.91762; 
+  // myRover.gps3.lat = 47.91895; myRover.gps3.lon = 106.91731;  // zuun 
+  // myRover.gps3.lat = 47.91898; myRover.gps3.lon = 106.91779;  // baruun
+  
+  //  myRover.gps2.lat = 47.91898; myRover.gps2.lon = 106.91757; 
+
   // xTaskCreate(MPU_task, "MPU task", 2048,  NULL, 2,  NULL);
   //xTaskCreate(GPS_task, "GPS task", 2048,  NULL, 2,  NULL);
   // xTaskCreate(Break_Parachute_task, "Break_Parachute_task", 2048,  NULL, 2,  NULL);
@@ -325,8 +342,10 @@ void Motor_task( void *pvParameters )
 }
 
 void Calculate_Angle_task(void *pvParameters) {
+  bool clockwise; 
   for (;;) {
     if (myRover.r_status == 5) {
+      clockwise = false ; 
       // Calculate distances using haversine formula
       double dlon2_3 = (myRover.gps3.lon - myRover.gps2.lon) * PI / 180.0;
       double dlat2_3 = (myRover.gps3.lat - myRover.gps2.lat) * PI / 180.0;
@@ -353,7 +372,27 @@ void Calculate_Angle_task(void *pvParameters) {
       double c = EARTH_RADIUS * c1_2 * 1000;
 
       // Calculate rotation angle
-      myRover.rot_angle = acos((a * a + c * c - b * b) / (2 * a * c)) * 180.0 / PI;
+      myRover.rot_angle = 180 - (acos((a * a + c * c - b * b) / (2 * a * c)) * 180.0 / PI);
+      
+      if(myRover.gps3.lat < myRover.gps1.lat && myRover.gps3.lat < myRover.gps2.lat){
+        if(myRover.gps2.lon < myRover.gps1.lon)
+          clockwise = true ; 
+      }
+      else if(myRover.gps3.lat < myRover.gps1.lat && myRover.gps3.lat > myRover.gps2.lat){
+        if(myRover.gps2.lon < myRover.gps1.lon)
+          clockwise = true ; 
+      }
+      else if(myRover.gps1.lat > myRover.gps3.lat && myRover.gps2.lat < myRover.gps3.lat ){
+        if(myRover.gps2.lat < myRover.gps1.lat)
+          clockwise = true ; 
+      }
+      else if(myRover.gps1.lat < myRover.gps3.lat && myRover.gps2.lat > myRover.gps3.lat ){
+        if(myRover.gps2.lat > myRover.gps1.lat)
+          clockwise = true ; 
+      }
+
+      if(clockwise)
+        myRover.rot_angle = 360 - myRover.rot_angle ;   
 
       vTaskDelay(1000 / portTICK_PERIOD_MS);
       myRover.r_status = 6;
