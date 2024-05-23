@@ -178,6 +178,9 @@ void MPU_task(void *pvParameters) // Temuulen MPU 9250 iig 100ms zaitai utga avj
           one = false ;
         }
       }
+      if(one == true){
+        myRover.r_status = 1 ; 
+      }
 
       Serial.print("MPU_9250 g : ");
       Serial.println(myRover.fall_accelerate);
