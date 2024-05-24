@@ -14,20 +14,14 @@
 #include <Wire.h>                 // MPU6050
 #include <MPU6050.h>
 
+MPU6050 mpu;
 //----------------------------------------------------------------------------------------------------------
-
-
-//-----------------------------------------------------------------MPU9250-----------------------------------------
-
-
-#include <Wire.h>
-#include <MPU6050.h>
 
 //----------------------------------------------------------------------------------------------------------
 
 
 
-//-----------------------------------------------------------------MOTOR-----------------------------------------
+//-------------------------------------------------------------MOTOR-----------------------------------------
 
 #define PWMA 26
 #define INA2 14
@@ -66,27 +60,21 @@ unsigned int pulseCountA = 0, pulseCountB = 0;
 #define EARTH_RADIUS 6371
 #define MOVE_DISTANCE 10.0 // Distance in meters
 
-const int freq = 50;
-const int speedA = 0;
-const int speedB = 1;
-const int resolution = 8;
-
-unsigned int pulseCountA=0, pulseCountB=0;
-
 //----------------------------------------------------------------------------------------------------------
 #include <TinyGPSPlus.h>
 
 TinyGPSPlus gps;
 
-
 //----------------------------------------------------------------------------------------------------------
-struct Location{
+struct Location
+{
   double lat;
   double lon;
 };
 typedef struct Location Location;
 
-struct Rover{
+struct Rover
+{
   // 0 - unasan eseh, unasan ued daraagiin tuluv -> 1,
   // 1 - shuher taslah -> 2,
   // 2 - gps1 in utga avah -> 3,
@@ -98,10 +86,12 @@ struct Rover{
 
   float fall_accelerate;
   double rot_angle=90;
+  bool enableForward = false;
 
   Location gps1; 
   Location gps2; 
   Location gps3; 
+  Location gps_current;
    
 };
 typedef struct Rover Rover;
@@ -109,12 +99,14 @@ typedef struct Rover Rover;
 Rover myRover;
 //----------------------------------------------------------------------------------------------------------
 
-void IRAM_ATTR encoderPulseA() {
+void IRAM_ATTR encoderPulseA()
+{
   pulseCountA++;
   
 }
 
-void IRAM_ATTR encoderPulseB() {
+void IRAM_ATTR encoderPulseB()
+{
   pulseCountB++;
 }
 
@@ -136,7 +128,7 @@ void setup()
   Wire.begin();
   mpu.initialize();
   while(!mpu.testConnection()){
-    vTaskDelay(100/porTICK_PERIOD_MS);
+    vTaskDelay(100/portTICK_PERIOD_MS);
     Serial.println("MPU6050 connection failed");
   }
   Serial.println("MPU6050 connection successful");
@@ -220,7 +212,7 @@ void setup()
 
 }
 
-void MPU_task(void *pvParameters) // Temuulen MPU 9250 iig 100ms zaitai utga avj 10 udaa utga ter toond 1 ees oor too bnu gdgiig shalgan draagiin tolov false - draagiin tolov, true baival dahiad 10 utga avna 
+void MPU_task(void *pvParameters)
 {  // This is a task.
   bool one = true ; // false uyd draagiin stage ruu shiljene 
 
@@ -275,9 +267,10 @@ void GPS_task(void *pvParameters)
   {
     while (Serial2.available() > 0)
     {
-      if(gps.encode(Serial2.read())){
-        
-        if(myRover.r_status == 2){
+      if(gps.encode(Serial2.read()))
+      {
+        if(myRover.r_status == 2)
+        {
           if( myRover.gps1.lat != gps.location.lat() && myRover.gps1.lon != gps.location.lng() && 0 != gps.location.lat() && 0 !=gps.location.lng())
           {
             myRover.gps1.lat = gps.location.lat();
@@ -287,6 +280,19 @@ void GPS_task(void *pvParameters)
             Serial.print("GPS 1 Longitude: ");
             Serial.println(myRover.gps1.lon, 6);
             myRover.r_status = 3;
+          }
+        }
+        if(myRover.r_status == 3)
+        {
+          if( myRover.gps1.lat != gps.location.lat() && myRover.gps1.lon != gps.location.lng() && 0 != gps.location.lat() && 0 !=gps.location.lng())
+          {
+            myRover.gps_current.lat = gps.location.lat();
+            myRover.gps_current.lon = gps.location.lng();
+            Serial.print("GPS Current Latitude: ");
+            Serial.println(myRover.gps_current.lat, 6);
+            Serial.print("GPS Current Longitude: ");
+            Serial.println(myRover.gps_current.lon, 6);
+            myRover.enableForward = true;
           }
         }
         if(myRover.r_status == 4)
@@ -342,24 +348,17 @@ void Motor_task( void *pvParameters )
 
   //----------------------------------------------------------
 
-  MPU6050 mpu;
-
   int16_t ax, ay, az;
   int16_t gx, gy, gz;
 
   unsigned long previousTime = 0, lastPrintTime = 0;
   float yaw = 0;
 
-  //----------------------------------------------------------
-
-
-
-
+  //-----------------------DISTANCE---------------------------
+  double dlon2_3, dlat2_3, a2_3, c2_3, a;
 
   for(;;)
   {
-
-    
     if(myRover.r_status == 3)
     {
       //------------------------------------Forward_path----------------------
@@ -418,13 +417,29 @@ void Motor_task( void *pvParameters )
       vTaskDelay(50/portTICK_PERIOD_MS);
       
       //----------------------------------------------------------
-      myRover.r_status = 7;
+      while(!myRover.enableForward){
+        vTaskDelay(10/portTICK_PERIOD_MS);
+      }
+      myRover.enableForward=false;
+      dlon2_3 = (myRover.gps1.lon - myRover.gps_current.lon) * PI / 180.0;
+      dlat2_3 = (myRover.gps1.lat - myRover.gps_current.lat) * PI / 180.0;
+      a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) +
+                    cos(myRover.gps_current.lat * PI / 180.0) * cos(myRover.gps1.lat * PI / 180.0) *
+                    sin(dlon2_3 / 2) * sin(dlon2_3 / 2);
+      c2_3 = 2 * atan2(sqrt(a2_3), sqrt(1 - a2_3));
+      a = EARTH_RADIUS * c2_3 * 1000;
+
+      Serial.print("Distance : ");
+      Serial.println(a) ;
+
+      if(a > 8){
+        myRover.r_status = 4;
+      }
+      
     }
     if(myRover.r_status == 6)
     {
       // Tootsoolson ontsogoor ergeh uildel
-      double angleInRadians, arcLength;
-      int encoderNum;
       angleInRadians = myRover.rot_angle * (M_PI / 180.0); // Convert degrees to radians
       arcLength = (angleInRadians / (2 * M_PI)) * (2 * M_PI * r_length); // Arc length formula
       encoderNum = (int)((80*arcLength)/(2*w_radius*M_PI));
@@ -451,13 +466,13 @@ void Motor_task( void *pvParameters )
   
       pulseCountA=0;
 
-      double dlon2_3 = (myRover.gps3.lon - myRover.gps2.lon) * PI / 180.0;
-      double dlat2_3 = (myRover.gps3.lat - myRover.gps2.lat) * PI / 180.0;
-      double a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) +
+      dlon2_3 = (myRover.gps3.lon - myRover.gps2.lon) * PI / 180.0;
+      dlat2_3 = (myRover.gps3.lat - myRover.gps2.lat) * PI / 180.0;
+      a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) +
                     cos(myRover.gps2.lat * PI / 180.0) * cos(myRover.gps3.lat * PI / 180.0) *
                     sin(dlon2_3 / 2) * sin(dlon2_3 / 2);
-      double c2_3 = 2 * atan2(sqrt(a2_3), sqrt(1 - a2_3));
-      double a = EARTH_RADIUS * c2_3 * 1000;
+      c2_3 = 2 * atan2(sqrt(a2_3), sqrt(1 - a2_3));
+      a = EARTH_RADIUS * c2_3 * 1000;
 
       Serial.print("Distance : ");
       Serial.println(a) ;
