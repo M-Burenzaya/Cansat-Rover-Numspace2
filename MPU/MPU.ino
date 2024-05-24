@@ -29,7 +29,7 @@ void loop() {
   // Convert raw data to 'g' and 'deg/s'
   // float Ax = ax / 16384.0;  // assuming the accelerometer is set to ±2g
   // float Ay = ay / 16384.0;
-  float Az = az / 16384.0;
+  // float Az = az / 16384.0;
 
   // float Gx = gx / 131.0;  // assuming the gyroscope is set to ±250 deg/s
   // float Gy = gy / 131.0;
@@ -43,6 +43,8 @@ void loop() {
   unsigned long currentTime = millis();
   float dt = (currentTime - previousTime) / 1000.0; 
   previousTime = currentTime;
+
+
   yaw += Gz * dt;
 
   // Print the results
@@ -53,5 +55,33 @@ void loop() {
   Serial.print(" Yaw: ");
   Serial.println(yaw);
 
-  delay(100);
+  delay(50);
+
+  while(1){
+    float Gz = gz / 131.0;
+
+  // Calculate roll and pitch
+  // float roll = atan2(Ay, sqrt(Ax * Ax + Az * Az)) * 180 / PI;
+  // float pitch = atan2(-Ax, sqrt(Ay * Ay + Az * Az)) * 180 / PI;
+
+  // Calculate yaw
+  unsigned long currentTime = millis();
+  float dt = (currentTime - previousTime) / 1000.0; 
+  previousTime = currentTime;
+
+
+  yaw += Gz * dt;
+
+  // Print the results
+  // Serial.print("Roll: ");
+  // Serial.print(roll);
+  // Serial.print(" Pitch: ");
+  // Serial.print(pitch);
+  Serial.print(" Yaw: ");
+  Serial.println(yaw);
+
+  delay(50);
+  }
+
+
 }
