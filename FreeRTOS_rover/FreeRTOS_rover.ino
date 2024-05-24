@@ -209,11 +209,11 @@ void setup()
   myRover.gps3.lat = 47.91936; myRover.gps3.lon = 106.91755;  
 
 
-  xTaskCreate(MPU_task, "MPU task", 2048,  NULL, 2,  NULL);
+  xTaskCreate(MPU_task, "MPU task", 2100,  NULL, 2,  NULL);
   // xTaskCreate(GPS_task, "GPS task", 2048,  NULL, 2,  NULL);
-  // xTaskCreate(Break_Parachute_task, "Break_Parachute_task", 2048,  NULL, 2,  NULL);
+  // xTaskCreate(Break_Parachute_task, "Break_Parachute_task", 1650,  NULL, 2,  NULL);
   // xTaskCreate(Motor_task, "Motor task", 3000,  NULL, 2,  NULL);
-  // xTaskCreate(Calculate_Angle_task, "Calculate_Angle_task", 2048,  NULL, 2,  NULL);
+  // xTaskCreate(Calculate_Angle_task, "Calculate_Angle_task", 1800,  NULL, 2,  NULL);
 
 }
 
