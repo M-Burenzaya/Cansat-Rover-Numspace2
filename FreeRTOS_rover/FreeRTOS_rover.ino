@@ -218,30 +218,40 @@ void setup()
 }
 
 void MPU_task(void *pvParameters)
-{  // This is a task.
+{  
   bool one = true ; // false uyd draagiin stage ruu shiljene 
 
   for (;;){ // A Task shall never return or exit.
     if(myRover.r_status==0)
     {
-      mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-      float Az = az / 16384.0;
+        mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+        float Az = az / 16384.0;
+        float Ay = ay / 16384.0;
+        float Ax = ax / 16384.0;
 
-      Serial.print("Z acc: ");
-      Serial.println(Az);
-      unsigned long currentTime = millis();
-      float dt = (currentTime - previousTime) / 1000.0; 
-      previousTime = currentTime;
+        float resultant = 0.0;
+
+        resultant = sqrt(sq(Az) + sq(Ay) + sq(Az));
+
+        Serial.print("Ax: ");
+        Serial.println(Ax);
+        Serial.print(" Ay: ");
+        Serial.println(Ay);
+        Serial.print(" Az: ");
+        Serial.println(Az);
+        Serial.print("resultantG acc: ");
+        Serial.println(resultant);
+
+      // unsigned long currentTime = millis();
+      // float dt = (currentTime - previousTime) / 1000.0; 
+      // previousTime = currentTime;
 
       vTaskDelay(100/portTICK_PERIOD_MS);
 
       // if(one == true){
       //   myRover.r_status = 1 ; 
       // }
-
-      // Serial.print("MPU_9250 g : ");
-      // Serial.println(myRover.fall_accelerate);
-
+        myRover.r_status = 0 ; 
     }
     vTaskDelay(1000/portTICK_PERIOD_MS);
   }
