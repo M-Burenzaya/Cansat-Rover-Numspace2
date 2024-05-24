@@ -1,6 +1,5 @@
 //----------------------------------------------------------------------------------------------------------
 
-
 //adding comment
 // Za 2 oo alaad ogyaa
 //test 3
@@ -54,11 +53,27 @@ TinyGPSPlus gps;
 
 //----------------------------------------------------------------------------------------------------------
 #include <MPU9250_WE.h>
-#include <Wire.h>
 
-// MPU9250 and GPS configuration
-#define MPU9250_ADDR 0x68 
-MPU9250_WE myMPU9250 = MPU9250_WE(MPU9250_ADDR);
+
+// // MPU9250 and GPS configuration
+// #define MPU9250_ADDR 0x68 
+// MPU9250_WE myMPU9250 = MPU9250_WE(MPU9250_ADDR);
+
+//----------------------------------------------------------------------------------------------------------
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+
+Adafruit_MPU6050 mpu;
+
+float gyroX, gyroY, gyroZ;
+float accX, accY, accZ;
+float temperature;
+
+//Gyroscope sensor deviation
+float gyroXerror = 0.07;
+float gyroYerror = 0.03;
+float gyroZerror = 0.01;
 
 //----------------------------------------------------------------------------------------------------------
 struct Location{
@@ -75,7 +90,7 @@ struct Rover{
   // 4 - gps2 in utga avah -> 5,
   // 5 - untsug bodoh ->6,
   // 6 - bodson untsuguur ergeh -> 2,
-  unsigned int r_status = 3;
+  unsigned int r_status = 4;
 
   float fall_accelerate;
   double rot_angle=90;
@@ -108,22 +123,18 @@ void Motor_task( void *pvParameters );
 void Calculate_Angle_task( void *pvParameters );
 
 
-// void Distance_task(void *pvParameters);
-// void Direction_task(void *pvParameters);
-
 void setup()
 {
   
   Serial.begin(115200); // Communication with the computer
   Serial2.begin(9600); // // Communication with the GPS module
   Wire.begin(); // i2c wire 
-  
   // Calibrate MPU9250
-  Serial.println("Position your MPU9250 flat and don't move it - calibrating...");
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
-  myMPU9250.autoOffsets();
-  Serial.println("Done!");
-  vTaskDelay(2000 / portTICK_PERIOD_MS);
+  // Serial.println("Position your MPU9250 flat and don't move it - calibrating...");
+  // vTaskDelay(1000 / portTICK_PERIOD_MS);
+  // myMPU9250.autoOffsets();
+  // Serial.println("Done!");
+  // vTaskDelay(2000 / portTICK_PERIOD_MS);
 
   pinMode(parachute, OUTPUT);
 
@@ -153,9 +164,9 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(M2_ENB), encoderPulseB, RISING);
 
   //-------------------lat-----------------------------
-  myRover.gps1.lat = 47.91879; myRover.gps1.lon = 106.91733; 
-  myRover.gps3.lat = 47.91870; myRover.gps3.lon = 106.91785;  // uragshaa
-  myRover.gps3.lat = 47.91897; myRover.gps3.lon = 106.91781;  // hoishoo
+  // myRover.gps1.lat = 47.91879; myRover.gps1.lon = 106.91733; 
+  // // myRover.gps3.lat = 47.91868; myRover.gps3.lon = 106.91786;  // uragshaa
+  // myRover.gps3.lat = 47.91898; myRover.gps3.lon = 106.91781;  // hoishoo
 
   // myRover.gps2.lat = 47.91884; myRover.gps2.lon = 106.91783; 
 
@@ -164,43 +175,69 @@ void setup()
   
   
   // myRover.gps1.lat = 47.91867; myRover.gps1.lon = 106.91762; 
-  // myRover.gps3.lat = 47.91895; myRover.gps3.lon = 106.91731;  // zuun 
-  // myRover.gps3.lat = 47.91898; myRover.gps3.lon = 106.91779;  // baruun
+  // //myRover.gps3.lat = 47.91895; myRover.gps3.lon = 106.91733;  // zuun 
+  // myRover.gps3.lat = 47.91899; myRover.gps3.lon = 106.91779;  // baruun
   
-  //  myRover.gps2.lat = 47.91898; myRover.gps2.lon = 106.91757; 
+  // myRover.gps2.lat = 47.91898; myRover.gps2.lon = 106.91757; 
 
-  // xTaskCreate(MPU_task, "MPU task", 2048,  NULL, 2,  NULL);
-  //xTaskCreate(GPS_task, "GPS task", 2048,  NULL, 2,  NULL);
+
+  //--------------  RANDOM -----------------------------------
+
+  // myRover.gps1.lat = 47.97924; myRover.gps1.lon = 106.76013; 
+  // myRover.gps2.lat = 47.98363; myRover.gps2.lon = 106.89401; 
+  // myRover.gps3.lat = 47.87563; myRover.gps3.lon = 106.90876;  
+  
+   //--------------  RANDOM 1 -----------------------------------
+
+  // myRover.gps1.lat = 47.91957; myRover.gps1.lon = 106.91703; 
+  // myRover.gps2.lat = 47.91833; myRover.gps2.lon = 106.91802; 
+  // myRover.gps3.lat = 47.91672; myRover.gps3.lon = 106.91726;  
+
+   //--------------  RANDOM 2 -----------------------------------
+
+  
+  //myRover.gps1.lat = 47.91836; myRover.gps1.lon = 106.91715; 
+  //--------- DISTANCE 1  
+  // myRover.gps2.lat = 47.1; myRover.gps2.lon = 106.6; 
+  // myRover.gps3.lat = 47.91846; myRover.gps3.lon = 106.91667;  
+  
+  // ----------DISTANCE 2 
+  // myRover.gps2.lat = 47.91935; myRover.gps2.lon = 106.91753; 
+
+  myRover.gps3.lat = 47.91936; myRover.gps3.lon = 106.91755;  
+
+
+  xTaskCreate(MPU_task, "MPU task", 2048,  NULL, 2,  NULL);
+  // xTaskCreate(GPS_task, "GPS task", 2048,  NULL, 2,  NULL);
   // xTaskCreate(Break_Parachute_task, "Break_Parachute_task", 2048,  NULL, 2,  NULL);
-  xTaskCreate(Motor_task, "Motor task", 3000,  NULL, 2,  NULL);
-  //xTaskCreate(Calculate_Angle_task, "Calculate_Angle_task", 2048,  NULL, 2,  NULL);
-  // myRover.gps3.lat = 47.47 ; 
-  // myRover.gps3.lon = 106.106 ; 
+  // xTaskCreate(Motor_task, "Motor task", 3000,  NULL, 2,  NULL);
+  // xTaskCreate(Calculate_Angle_task, "Calculate_Angle_task", 2048,  NULL, 2,  NULL);
+
 }
 
 void MPU_task(void *pvParameters) // Temuulen MPU 9250 iig 100ms zaitai utga avj 10 udaa utga ter toond 1 ees oor too bnu gdgiig shalgan draagiin tolov false - draagiin tolov, true baival dahiad 10 utga avna 
 {  // This is a task.
-  xyzFloat gValue;
   bool one = true ; // false uyd draagiin stage ruu shiljene 
 
   for (;;){ // A Task shall never return or exit.
-    if(myRover.r_status==0){
-      for(int i = 0 ; i < 10 ; i++){
-        gValue = myMPU9250.getGValues();
-        myRover.fall  _accelerate = myMPU9250.getResultantG(gValue);
+    if(myRover.r_status==0)
+    {
+      // for(int i = 0 ; i < 10 ; i++){
+      //   gValue = myMPU9250.getGValues();
+      //   myRover.fall_accelerate = myMPU9250.getResultantG(gValue);
 
-        vTaskDelay(100 / portTick_PERIOD_MS) ;
+      //   vTaskDelay(100 /portTICK_PERIOD_MS);
 
-        if(myRover.fall_accelerate != 1) {
-          one = false ;
-        }
-      }
-      if(one == true){
-        myRover.r_status = 1 ; 
-      }
+      //   if(myRover.fall_accelerate != 1) {
+      //     one = false ;
+      //   }
+      // }
+      // if(one == true){
+      //   myRover.r_status = 1 ; 
+      // }
 
-      Serial.print("MPU_9250 g : ");
-      Serial.println(myRover.fall_accelerate);
+      // Serial.print("MPU_9250 g : ");
+      // Serial.println(myRover.fall_accelerate);
 
     }
     vTaskDelay(1000/portTICK_PERIOD_MS);
@@ -233,32 +270,36 @@ void GPS_task(void *pvParameters)
   {
     while (Serial2.available() > 0)
     {
-      gps.encode(Serial2.read());
-    }
-    if(gps.location.isUpdated())
-    {
-      if(myRover.r_status == 2){
-        myRover.gps1.lat = gps.location.lat();
-        myRover.gps1.lon = gps.location.lng();
-        Serial.print("GPS 1 Latitude: ");
-        Serial.println(myRover.gps1.lat, 6);
-        Serial.print("GPS 1 Longitude: ");
-        Serial.println(myRover.gps1.lon, 6);
-        myRover.r_status = 2;
+      if(gps.encode(Serial2.read())){
+        
+        if(myRover.r_status == 2){
+          if( myRover.gps1.lat != gps.location.lat() && myRover.gps1.lon != gps.location.lng() && 0 != gps.location.lat() && 0 !=gps.location.lng())
+          {
+            myRover.gps1.lat = gps.location.lat();
+            myRover.gps1.lon = gps.location.lng();
+            Serial.print("GPS 1 Latitude: ");
+            Serial.println(myRover.gps1.lat, 6);
+            Serial.print("GPS 1 Longitude: ");
+            Serial.println(myRover.gps1.lon, 6);
+            myRover.r_status = 3;
+          }
+        }
+        if(myRover.r_status == 4)
+        {
+          if(myRover.gps2.lat != gps.location.lat() && myRover.gps2.lon != gps.location.lng() && 0 != gps.location.lat() && 0 !=gps.location.lng())
+          {
+            myRover.gps2.lat = gps.location.lat();
+            myRover.gps2.lon = gps.location.lng();
+            Serial.print("GPS 2 Latitude: ");
+            Serial.println(myRover.gps2.lat, 6);
+            Serial.print("GPS 2 Longitude: ");
+            Serial.println(myRover.gps2.lon, 6);
+            myRover.r_status = 5; // 5
+          }
+        }
       }
-
-      if(myRover.r_status == 4)
-      {
-        myRover.gps2.lat = gps.location.lat();
-        myRover.gps2.lon = gps.location.lng();
-        Serial.print("GPS 2 Latitude: ");
-        Serial.println(myRover.gps2.lat, 6);
-        Serial.print("GPS 2 Longitude: ");
-        Serial.println(myRover.gps2.lon, 6);
-        myRover.r_status = 2; // 5
-      }
     }
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
 
@@ -269,6 +310,8 @@ void Motor_task( void *pvParameters )
 
   for(;;)
   {
+
+    
     if(myRover.r_status == 3)
     {
       digitalWrite(INA2, 0);
@@ -326,9 +369,14 @@ void Motor_task( void *pvParameters )
 
       double dlon2_3 = (myRover.gps3.lon - myRover.gps2.lon) * PI / 180.0;
       double dlat2_3 = (myRover.gps3.lat - myRover.gps2.lat) * PI / 180.0;
-      double a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) + cos(myRover.gps2.lat * PI / 180.0) * cos(myRover.gps3.lat * PI / 180.0) * sin(dlon2_3 / 2) * sin(dlon2_3 / 2);
+      double a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) +
+                    cos(myRover.gps2.lat * PI / 180.0) * cos(myRover.gps3.lat * PI / 180.0) *
+                    sin(dlon2_3 / 2) * sin(dlon2_3 / 2);
+      double c2_3 = 2 * atan2(sqrt(a2_3), sqrt(1 - a2_3));
+      double a = EARTH_RADIUS * c2_3 * 1000;
+
       Serial.print("Distance : ");
-      Serial.println(a2_3) ;
+      Serial.println(a) ;
 
       if(a2_3 < 10) {
         myRover.r_status = 7 ; 
@@ -375,105 +423,40 @@ void Calculate_Angle_task(void *pvParameters) {
       myRover.rot_angle = 180 - (acos((a * a + c * c - b * b) / (2 * a * c)) * 180.0 / PI);
       
       if(myRover.gps3.lat < myRover.gps1.lat && myRover.gps3.lat < myRover.gps2.lat){
-        if(myRover.gps2.lon < myRover.gps1.lon)
+        if(myRover.gps2.lon > myRover.gps1.lon)
           clockwise = true ; 
+        else if(myRover.gps2.lon < myRover.gps3.lon && myRover.gps1.lon < myRover.gps3.lon && myRover.gps2.lat > myRover.gps1.lat)
+          clockwise = true; 
       }
-      else if(myRover.gps3.lat < myRover.gps1.lat && myRover.gps3.lat > myRover.gps2.lat){
+      else if(myRover.gps3.lat > myRover.gps1.lat && myRover.gps3.lat > myRover.gps2.lat){
         if(myRover.gps2.lon < myRover.gps1.lon)
-          clockwise = true ; 
+          clockwise = true; 
+        else if(myRover.gps2.lon > myRover.gps3.lon && myRover.gps1.lon > myRover.gps3.lon && myRover.gps2.lat < myRover.gps1.lat)
+          clockwise = true;
       }
-      else if(myRover.gps1.lat > myRover.gps3.lat && myRover.gps2.lat < myRover.gps3.lat ){
+      else if(myRover.gps1.lat > myRover.gps3.lat && myRover.gps2.lat < myRover.gps3.lat && myRover.gps3.lon < myRover.gps1.lon && myRover.gps3.lon < myRover.gps2.lon ){
         if(myRover.gps2.lat < myRover.gps1.lat)
           clockwise = true ; 
       }
-      else if(myRover.gps1.lat < myRover.gps3.lat && myRover.gps2.lat > myRover.gps3.lat ){
+      else if(myRover.gps1.lat < myRover.gps3.lat && myRover.gps2.lat > myRover.gps3.lat && myRover.gps3.lon > myRover.gps1.lon && myRover.gps3.lon > myRover.gps2.lon ){
         if(myRover.gps2.lat > myRover.gps1.lat)
           clockwise = true ; 
       }
 
+
       if(clockwise)
         myRover.rot_angle = 360 - myRover.rot_angle ;   
 
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
-      myRover.r_status = 6;
+      Serial.print("Rotate Angle: ");
+      Serial.println(myRover.rot_angle);
+      myRover.r_status = 7;
     }
     
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 
-// void Direction_task(void *pvParameters)
-// {
-//   double angle;
-//   for (;;) {
-//     // Assuming GPS values for gps1, gps2, gps3 are set after moving the rover
-//     calc_angles(myRover.gps1.lon, myRover.gps1.lat, myRover.gps2.lon, myRover.gps2.lat, myRover.gps3.lon, myRover.gps3.lat,
-//                 &angle);
 
-//     Serial.print("reverse A: ");-
-//     Serial.println(angle);
-
-//     vTaskDelay(10000 / portTICK_PERIOD_MS);
-//   }
-// }
-
-// void Distance_task(void *pvParameters)
-// {
-//   static Location lastPoint = {0, 0};
-//   static bool initialized = false;
-  
-//   for (;;) {
-//     if (!initialized) {
-//       lastPoint = myRover.gps1;
-//       initialized = true;
-//     }
-
-//     double dist = haversine(lastPoint.lon, lastPoint.lat, myRover.gps1.lon, myRover.gps1.lat);
-//     Serial.print("Distance: ");
-//     Serial.print(dist);
-//     Serial.println(" meters");
-
-//     if (dist >= MOVE_DISTANCE) {
-//       lastPoint = myRover.gps1;
-//       myRover.gps2 = lastPoint; // Update the second GPS point
-
-//       // Move the rover 10 meters (implement your movement logic here)
-//       // After moving, update the GPS point
-//       myRover.gps3 = lastPoint; // For simplicity, using the same point. Update with actual logic.
-//     }
-
-//     vTaskDelay(5000 / portTICK_PERIOD_MS);
-//   }
-// }
-//----------------------------------------------------------------------------------------------------------
-
-//Function
-// double degreesToRadians(double deg)
-// {
-//     return deg * M_PI / 180.0;
-// }
-
-// double haversine(double lon1, double lat1, double lon2, double lat2)
-// {
-//   double dlon = degreesToRadians(lon2 - lon1);
-//   double dlat = degreesToRadians(lat2 - lat1);
-//   double a = sin(dlat / 2) * sin(dlat / 2) +
-//              cos(degreesToRadians(lat1)) * cos(degreesToRadians(lat2)) *
-//              sin(dlon / 2) * sin(dlon / 2);
-//   double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-//   double distance = EARTH_RADIUS * c;
-//   return distance * 1000; // Convert to meters
-// }
-
-// void calc_angles(double lon1, double lat1, double lon2, double lat2, double lon3, double lat3, double *angle)
-// {
-//   double a = haversine(lon2, lat2, lon3, lat3);
-//   double b = haversine(lon1, lat1, lon3, lat3);
-//   double c = haversine(lon1, lat1, lon2, lat2);
-
-//   rot_angle = acos((a * a + c * c - b * b) / (2 * a * c)) * 180.0 / PI;
-
-// }
 void loop()
 {
 
