@@ -15,6 +15,11 @@
 #include <MPU6050.h>
 
 MPU6050 mpu;
+
+int16_t ax, ay, az;
+int16_t gx, gy, gz;
+
+unsigned long previousTime = 0, lastPrintTime = 0;
 //----------------------------------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------------------------------
@@ -82,7 +87,7 @@ struct Rover
   // 4 - gps2 in utga avah -> 5,
   // 5 - untsug bodoh ->6,
   // 6 - bodson untsuguur ergeh -> 2,
-  unsigned int r_status = 4;
+  unsigned int r_status = 0;
 
   float fall_accelerate;
   double rot_angle=90;
@@ -219,16 +224,17 @@ void MPU_task(void *pvParameters)
   for (;;){ // A Task shall never return or exit.
     if(myRover.r_status==0)
     {
-      // for(int i = 0 ; i < 10 ; i++){
-      //   gValue = myMPU9250.getGValues();
-      //   myRover.fall_accelerate = myMPU9250.getResultantG(gValue);
+      mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+      float Az = az / 16384.0;
 
-      //   vTaskDelay(100 /portTICK_PERIOD_MS);
+      Serial.print("Z acc: ");
+      Serial.println(Az);
+      unsigned long currentTime = millis();
+      float dt = (currentTime - previousTime) / 1000.0; 
+      previousTime = currentTime;
 
-      //   if(myRover.fall_accelerate != 1) {
-      //     one = false ;
-      //   }
-      // }
+      vTaskDelay(100/portTICK_PERIOD_MS);
+
       // if(one == true){
       //   myRover.r_status = 1 ; 
       // }
@@ -348,10 +354,6 @@ void Motor_task( void *pvParameters )
 
   //----------------------------------------------------------
 
-  int16_t ax, ay, az;
-  int16_t gx, gy, gz;
-
-  unsigned long previousTime = 0, lastPrintTime = 0;
   float yaw = 0;
 
   //-----------------------DISTANCE---------------------------
