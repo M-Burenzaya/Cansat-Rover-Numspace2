@@ -221,39 +221,49 @@ void MPU_task(void *pvParameters)
 {  
   bool one = true ; // false uyd draagiin stage ruu shiljene 
 
+  float Az, Ay, Ax;
+  float resultant, preResultant;
+  int i=0;
   for (;;){ // A Task shall never return or exit.
     if(myRover.r_status==0)
     {
-        mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-        float Az = az / 16384.0;
-        float Ay = ay / 16384.0;
-        float Ax = ax / 16384.0;
-
-        float resultant = 0.0;
-
-        resultant = sqrt(sq(Az) + sq(Ay) + sq(Az));
-
-        Serial.print("Ax: ");
-        Serial.println(Ax);
-        Serial.print(" Ay: ");
-        Serial.println(Ay);
-        Serial.print(" Az: ");
-        Serial.println(Az);
-        Serial.print("resultantG acc: ");
-        Serial.println(resultant);
-
-      // unsigned long currentTime = millis();
-      // float dt = (currentTime - previousTime) / 1000.0; 
-      // previousTime = currentTime;
-
-      vTaskDelay(100/portTICK_PERIOD_MS);
-
-      // if(one == true){
-      //   myRover.r_status = 1 ; 
-      // }
-        myRover.r_status = 0 ; 
+        for( i=0; i<100; i++){
+          mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+          Az = az / 16384.0;
+          Ay = ay / 16384.0;
+          Ax = ax / 16384.0;
+          preResultant = resultant;
+          resultant = 0.0;
+          resultant = sqrt(sq(Az) + sq(Ay) + sq(Az));
+          
+          Serial.print("Ax: ");
+          Serial.println(Ax);
+          Serial.print("Ay: ");
+          Serial.println(Ay);
+          Serial.print("Az: ");
+          Serial.println(Az);
+          Serial.print("resultantG acc: ");
+          Serial.println(resultant);
+          vTaskDelay(100/portTICK_PERIOD_MS);
+          if(resultant - preResultant > 0.05 || resultant - preResultant < -0.05){
+            Serial.println("--------------BREAK----------- ");
+            break;
+          }
+            
+        }
+        if(i==100){
+          myRover.r_status = 1; 
+          Serial.println("My Rover dropped on the ground");
+        }
+        vTaskDelay(100/portTICK_PERIOD_MS);
     }
+
+    UBaseType_t uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
+    Serial.print("MPU task stack high watermark: ");
+    Serial.println(uxHighWaterMark);
+
     vTaskDelay(1000/portTICK_PERIOD_MS);
+
   }
 }
 void Break_Parachute_task( void *pvParameters )
