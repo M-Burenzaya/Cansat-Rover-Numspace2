@@ -88,7 +88,7 @@ struct Rover
   // 4 - gps2 in utga avah -> 5,
   // 5 - untsug bodoh ->6,
   // 6 - bodson untsuguur ergeh -> 2,
-  unsigned int r_status = 0;
+  unsigned int r_status = 3;
 
   float fall_accelerate;
   double rot_angle=90;
@@ -155,7 +155,7 @@ void setup()
   pinMode(INB2, OUTPUT);
   pinMode(INB1, OUTPUT);
 
-  digitalWrite(STBY, 1);
+  // digitalWrite(STBY, 1);
   ledcSetup(speedA, freq, resolution);
   ledcAttachPin(PWMA, speedA);
 
@@ -210,10 +210,10 @@ void setup()
 
 
   xTaskCreate(MPU_task, "MPU task", 2048,  NULL, 2,  NULL);
-  // xTaskCreate(GPS_task, "GPS task", 2048,  NULL, 2,  NULL);
-  // xTaskCreate(Break_Parachute_task, "Break_Parachute_task", 2048,  NULL, 2,  NULL);
-  // xTaskCreate(Motor_task, "Motor task", 3000,  NULL, 2,  NULL);
-  // xTaskCreate(Calculate_Angle_task, "Calculate_Angle_task", 2048,  NULL, 2,  NULL);
+  xTaskCreate(GPS_task, "GPS task", 2048,  NULL, 2,  NULL);
+  xTaskCreate(Break_Parachute_task, "Break_Parachute_task", 2048,  NULL, 2,  NULL);
+  xTaskCreate(Motor_task, "Motor task", 3000,  NULL, 2,  NULL);
+  xTaskCreate(Calculate_Angle_task, "Calculate_Angle_task", 2048,  NULL, 2,  NULL);
 
 }
 
@@ -255,12 +255,12 @@ void MPU_task(void *pvParameters)
           myRover.r_status = 1; 
           Serial.println("My Rover dropped on the ground");
         }
-        vTaskDelay(100/portTICK_PERIOD_MS);
+        vTaskDelay(1000/portTICK_PERIOD_MS);
     }
 
-    UBaseType_t uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
-    Serial.print("MPU task stack high watermark: ");
-    Serial.println(uxHighWaterMark);
+    // UBaseType_t uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
+    // Serial.print("MPU task stack high watermark: ");
+    // Serial.println(uxHighWaterMark);
 
     vTaskDelay(1000/portTICK_PERIOD_MS);
 
@@ -319,7 +319,7 @@ void GPS_task(void *pvParameters)
             Serial.print("GPS Current Longitude: ");
             Serial.println(myRover.gps_current.lon, 6);
             myRover.enableForward = true;
-            myRover.r_status = 4;
+            // myRover.r_status = 4;
           }
         }
         if(myRover.r_status == 4)
@@ -348,7 +348,7 @@ void Motor_task( void *pvParameters )
 
   //----------------------------------------------------------
 
-  const int setpoint = 80;
+  const int setpoint = 90;
   int varset;
 
   int pwmA = 0, pwmB = 0;
@@ -372,7 +372,8 @@ void Motor_task( void *pvParameters )
   float Gz = 0.0;
   float dt = 0.0;
   float err = 0.0;
-  for (int i = 0; i < 100; i++) {
+ 
+  for (int i = 0; i < 1000; i++) {
     mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
     unsigned long currentTime = millis();
@@ -384,7 +385,7 @@ void Motor_task( void *pvParameters )
 
     vTaskDelay(50/portTICK_PERIOD_MS);
   }
-  err = err / 100;
+  err = err / 1000;
   Serial.println(err);
   for(;;)
   {
@@ -396,7 +397,7 @@ void Motor_task( void *pvParameters )
       digitalWrite(INB2, 0);
       digitalWrite(INB1, 1);
 
-      varset = constrain(abs(setpoint / (0.5 * yaw)), setpoint/3, setpoint);
+      varset = constrain(abs(setpoint / (0.1 * yaw)), setpoint/3, setpoint);
 
       //-------------------------------------------------------------------
 
@@ -457,22 +458,31 @@ void Motor_task( void *pvParameters )
       vTaskDelay(50/portTICK_PERIOD_MS);
       
       //----------------------------------------------------------
-      // while(!myRover.enableForward){
-      //   vTaskDelay(10/portTICK_PERIOD_MS);
-      // }
-      // myRover.enableForward=false;
-      // dlon2_3 = (myRover.gps1.lon - myRover.gps_current.lon) * PI / 180.0;
-      // dlat2_3 = (myRover.gps1.lat - myRover.gps_current.lat) * PI / 180.0;
-      // a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) +
-      //               cos(myRover.gps_current.lat * PI / 180.0) * cos(myRover.gps1.lat * PI / 180.0) *
-      //               sin(dlon2_3 / 2) * sin(dlon2_3 / 2);
-      // c2_3 = 2 * atan2(sqrt(a2_3), sqrt(1 - a2_3));
-      // a = EARTH_RADIUS * c2_3 * 1000;
 
-      // Serial.print("Distance : ");
-      // Serial.println(a) ;
+      while(!myRover.enableForward){
+        vTaskDelay(10/portTICK_PERIOD_MS);
+      }
+      myRover.enableForward=false;
+      dlon2_3 = (myRover.gps1.lon - myRover.gps_current.lon) * PI / 180.0;
+      dlat2_3 = (myRover.gps1.lat - myRover.gps_current.lat) * PI / 180.0;
+      a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) +
+                    cos(myRover.gps_current.lat * PI / 180.0) * cos(myRover.gps1.lat * PI / 180.0) *
+                    sin(dlon2_3 / 2) * sin(dlon2_3 / 2);
+      c2_3 = 2 * atan2(sqrt(a2_3), sqrt(1 - a2_3));
+      a = EARTH_RADIUS * c2_3 * 1000;
+
+      Serial.print("Distance : ");
+      Serial.println(a) ;
 
       if(a > 8){
+
+        digitalWrite(INA2, 0);
+        digitalWrite(INA1, 0);
+        digitalWrite(INB2, 0);
+        digitalWrite(INB1, 0);
+        ledcWrite(speedA, 0);
+        ledcWrite(speedB, 0);
+
         myRover.r_status = 4;
       }
       
@@ -517,7 +527,8 @@ void Motor_task( void *pvParameters )
       Serial.print("Distance : ");
       Serial.println(a) ;
 
-      if(a2_3 < 10) {
+      if(a2_3 < 10)
+      {
         myRover.r_status = 7 ; 
       }
       myRover.r_status = 2 ;
@@ -533,7 +544,8 @@ void Calculate_Angle_task(void *pvParameters)
 {
   bool clockwise; 
   for (;;) {
-    if (myRover.r_status == 5) {
+    if (myRover.r_status == 5)
+    {
       clockwise = false ; 
       // Calculate distances using haversine formula
       double dlon2_3 = (myRover.gps3.lon - myRover.gps2.lon) * PI / 180.0;
@@ -584,13 +596,12 @@ void Calculate_Angle_task(void *pvParameters)
           clockwise = true ; 
       }
 
-
       if(clockwise)
         myRover.rot_angle = 360 - myRover.rot_angle ;   
 
       Serial.print("Rotate Angle: ");
       Serial.println(myRover.rot_angle);
-      myRover.r_status = 7;
+      myRover.r_status = 6;
     }
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }

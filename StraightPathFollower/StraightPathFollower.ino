@@ -113,7 +113,7 @@ void setup() {
 
   // Initial motor directions
   digitalWrite(INA2, 0);
-  digitalWrite(INA1, 1);
+  digitalWrite(INA1, 0);
   digitalWrite(INB2, 0);
   digitalWrite(INB1, 1);
 }
