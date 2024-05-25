@@ -27,7 +27,7 @@ const int setpoint = 30;
 int varset;
 
 // PID coefficients
-float Kp = 1, Ki = 0.7, Kd = 0.4;
+float Kp = 1, Ki = 0.5, Kd = 0.4;
 float integralA = 0, integralB = 0;
 float previousErrorA = 0, previousErrorB = 0;
 
@@ -99,6 +99,7 @@ void setup() {
 }
 
 void turnToAngle(float desiredYaw) {
+
   float Gz = 0.0;
   float dt = 0.0;
   float err = 0.0;
@@ -129,9 +130,9 @@ void turnToAngle(float desiredYaw) {
   float integral = 0;
   float previousError = 0;
 
-  while (1) {
-    if (desiredYaw > 0) {
-      
+  if (desiredYaw > 0) {
+
+    while (1) {
       mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
       unsigned long currentTime = millis();
@@ -143,23 +144,20 @@ void turnToAngle(float desiredYaw) {
       currentYaw = currentYaw + (Gz * dt - err);
 
       int direction = (desiredYaw > currentYaw) ? 1 : 0;
-      float error = abs(desiredYaw - currentYaw);
+      float error = desiredYaw - currentYaw;
 
       if (direction == 1) {
-        digitalWrite(INA2, 0);
-        digitalWrite(INA1, 1);
-        digitalWrite(INB2, 1);
-        digitalWrite(INB1, 0);
-      } else {
         digitalWrite(INA2, 1);
         digitalWrite(INA1, 0);
-        digitalWrite(INB2, 0);
-        digitalWrite(INB1, 1);
+
+      } else {
+        digitalWrite(INA2, 0);
+        digitalWrite(INA1, 1);
       }
 
       integral += error * dt;
       float derivative = (error - previousError) / dt;
-      float controlSignal = Kp * error + Ki * integral + Kd * derivative;
+      float controlSignal = 80 + Kp * error + Ki * integral + Kd * derivative;
       previousError = error;
 
       pwm = constrain(controlSignal, 0, MAX_PWM);
@@ -184,28 +182,78 @@ void turnToAngle(float desiredYaw) {
         break;
       }
 
-    } else {
-
+      delay(10);
     }
 
-    delay(10);
+  } else {
+
+    while (1) {
+      mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+      unsigned long currentTime = millis();
+      dt = (currentTime - previousTime) / 1000.0;
+      previousTime = currentTime;
+
+      Gz = gz / 131.0;
+
+      currentYaw = currentYaw + (Gz * dt - err);
+
+      int direction = (desiredYaw > currentYaw) ? 1 : 0;
+      float error = abs(desiredYaw) - abs(currentYaw);
+
+      if (direction == 1) {
+        digitalWrite(INB2, 1);
+        digitalWrite(INB1, 0);
+
+      } else {
+        digitalWrite(INB2, 0);
+        digitalWrite(INB1, 1);
+      }
+
+      integral += error * dt;
+      float derivative = (error - previousError) / dt;
+      float controlSignal = 80 + Kp * error + Ki * integral + Kd * derivative;
+      previousError = error;
+
+      pwm = constrain(controlSignal, 0, MAX_PWM);
+
+      ledcWrite(speedB, pwm);
+
+      Serial.print("Current Yaw: ");
+      Serial.print(currentYaw);
+      Serial.print("\tDesired Yaw: ");
+      Serial.print(desiredYaw);
+      Serial.print("\tPWM: ");
+      Serial.println(pwm);
+
+      if (abs(error) < errorThreshold) {
+        consecutiveSmallErrors++;
+      } else {
+        consecutiveSmallErrors = 0;
+      }
+
+      if (consecutiveSmallErrors >= maxConsecutiveSmallErrors && 
+          (currentTime - settleStartTime) >= settlingTime) {
+        break;
+      }
+
+      delay(10);
+    }
   }
-  // Stop the motors
+
   ledcWrite(speedA, 0);
   ledcWrite(speedB, 0);
 }
 
 void loop() {
 
-  // Example: Turn the rover to 90 degrees
+  turnToAngle(-90.0);
+  delay(1000);
   turnToAngle(90.0);
-  // delay(2000);
-  // turnToAngle(-90.0);
-  // delay(2000);
-  // turnToAngle(180.0);
-  // delay(2000);
-  // turnToAngle(-180.0);
+  delay(1000);
+  turnToAngle(-90.0);
+  delay(1000);
+  turnToAngle(90.0);
+  delay(1000);
 
-  // Wait for a while before another action
-  delay(2000);
 }
