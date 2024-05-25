@@ -25,12 +25,10 @@ float yaw = 0;
 
 //----------------------------------------------------------------------------------------------------------
 
-
-
 //-------------------------------------------------------------MOTOR-----------------------------------------
 
-#define PWMA 26
-#define INA2 14
+#define PWMA 14
+#define INA2 26 //temuulen pin oorchlov
 #define INA1 13
 #define STBY 33
 #define PWMB 25
@@ -88,7 +86,7 @@ struct Rover
   // 4 - gps2 in utga avah -> 5,
   // 5 - untsug bodoh ->6,
   // 6 - bodson untsuguur ergeh -> 2,
-  unsigned int r_status = 3;
+  unsigned int r_status = 2;
 
   float fall_accelerate;
   double rot_angle=90;
@@ -209,11 +207,14 @@ void setup()
   myRover.gps3.lat = 47.91936; myRover.gps3.lon = 106.91755;  
 
 
-  xTaskCreate(MPU_task, "MPU task", 2048,  NULL, 2,  NULL);
-  xTaskCreate(GPS_task, "GPS task", 2048,  NULL, 2,  NULL);
-  xTaskCreate(Break_Parachute_task, "Break_Parachute_task", 2048,  NULL, 2,  NULL);
-  xTaskCreate(Motor_task, "Motor task", 3000,  NULL, 2,  NULL);
-  xTaskCreate(Calculate_Angle_task, "Calculate_Angle_task", 2048,  NULL, 2,  NULL);
+
+  // xTaskCreate(MPU_task, "MPU task", 2048,  NULL, 2,  NULL);
+  xTaskCreate(GPS_task, "GPS task", 3000,  NULL, 2,  NULL);
+  // xTaskCreate(Break_Parachute_task, "Break_Parachute_task", 2048,  NULL, 2,  NULL);
+  // xTaskCreate(Motor_task, "Motor task", 3000,  NULL, 2,  NULL);
+  // xTaskCreate(Calculate_Angle_task, "Calculate_Angle_task", 2048,  NULL, 2,  NULL);
+
+ 
 
 }
 
@@ -281,7 +282,7 @@ void Break_Parachute_task( void *pvParameters )
       digitalWrite(parachute, LOW); // Set low 
       Serial.println("LOW") ; 
 
-      myRover.r_status = 2; // 2 baih ystoi  
+      myRover.r_status = 7; // 2 baih ystoi  
     }
     vTaskDelay(1000/portTICK_PERIOD_MS);
   }
@@ -293,8 +294,10 @@ void GPS_task(void *pvParameters)
   {
     while (Serial2.available() > 0)
     {
+      
       if(gps.encode(Serial2.read()))
       {
+        // Serial.println("Data arrived");
         if(myRover.r_status == 2)
         {
           if( myRover.gps1.lat != gps.location.lat() && myRover.gps1.lon != gps.location.lng() && 0 != gps.location.lat() && 0 !=gps.location.lng())
@@ -319,7 +322,7 @@ void GPS_task(void *pvParameters)
             Serial.print("GPS Current Longitude: ");
             Serial.println(myRover.gps_current.lon, 6);
             myRover.enableForward = true;
-            // myRover.r_status = 4;
+            myRover.r_status = 4;
           }
         }
         if(myRover.r_status == 4)
@@ -362,159 +365,288 @@ void Motor_task( void *pvParameters )
   // Yaw correction PID coefficients
   float yawKp = 5;
 
-  //----------------------------------------------------------
 
   float yaw = 0;
 
   //-----------------------DISTANCE---------------------------
   double dlon2_3, dlat2_3, a2_3, c2_3, a;
   //----------------------------------------------------------
-  float Gz = 0.0;
-  float dt = 0.0;
-  float err = 0.0;
+
+  // PID coefficients
+  float Kp_r = 1, Ki_r = 0.5, Kd_r = 0.4;
+
  
-  for (int i = 0; i < 1000; i++) {
-    mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
-    unsigned long currentTime = millis();
-    dt = (currentTime - previousTime) / 1000.0;
-    previousTime = currentTime;
-
-    Gz = gz / 131.0;
-    err = err + Gz * dt;
-
-    vTaskDelay(50/portTICK_PERIOD_MS);
-  }
-  err = err / 1000;
-  Serial.println(err);
   for(;;)
   {
     if(myRover.r_status == 3)
     {
+
+      float Gz = 0.0;
+      float dt = 0.0;
+      float err = 0.0;
+      for (int i = 0; i < 1000; i++) {
+        mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+        unsigned long currentTime = millis();
+        dt = (currentTime - previousTime) / 1000.0;
+        previousTime = currentTime;
+
+        Gz = gz / 131.0;
+        err = err + Gz * dt;
+
+        vTaskDelay(50/portTICK_PERIOD_MS);
+      }
+      err = err / 1000;
+      Serial.println(err);
+
       //------------------------------------Forward_path----------------------
       digitalWrite(INA2, 1);
       digitalWrite(INA1, 0);
       digitalWrite(INB2, 0);
       digitalWrite(INB1, 1);
 
-      varset = constrain(abs(setpoint / (0.1 * yaw)), setpoint/3, setpoint);
+      while(1){
+        varset = constrain(abs(setpoint / (0.1 * yaw)), setpoint/3, setpoint);
 
-      //-------------------------------------------------------------------
+        //-------------------------------------------------------------------
 
-      mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+        mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
-      unsigned long currentTime = millis();
-      dt = (currentTime - previousTime) / 1000.0;
-      previousTime = currentTime;
+        unsigned long currentTime = millis();
+        dt = (currentTime - previousTime) / 1000.0;
+        previousTime = currentTime;
 
-      Gz = gz / 131.0;
-      yaw = yaw + (Gz * dt - err);
+        Gz = gz / 131.0;
+        yaw = yaw + (Gz * dt - err);
 
-      //-------------------------------------------------------------------
+        //-------------------------------------------------------------------
 
-      int errorA = varset - pulseCountA;
-      integralA += errorA;
-      int derivativeA = errorA - previousErrorA;
-      pwmA = Kp * errorA + Ki * integralA + Kd * derivativeA;
-      previousErrorA = errorA;
+        int errorA = varset - pulseCountA;
+        integralA += errorA;
+        int derivativeA = errorA - previousErrorA;
+        pwmA = Kp * errorA + Ki * integralA + Kd * derivativeA;
+        previousErrorA = errorA;
 
-      int errorB = varset - pulseCountB;
-      integralB += errorB;
-      int derivativeB = errorB - previousErrorB;
-      pwmB = Kp * errorB + Ki * integralB + Kd * derivativeB;
-      previousErrorB = errorB;
+        int errorB = varset - pulseCountB;
+        integralB += errorB;
+        int derivativeB = errorB - previousErrorB;
+        pwmB = Kp * errorB + Ki * integralB + Kd * derivativeB;
+        previousErrorB = errorB;
 
-      //-------------------------------------------------------------------
+        //-------------------------------------------------------------------
 
-      // Corrective action based on yaw
-      float yawCorrection = yawKp * yaw;
+        // Corrective action based on yaw
+        float yawCorrection = yawKp * yaw;
 
-      pwmA = constrain(pwmA - yawCorrection - abs(yaw / 2), 0, MAX_PWM);
-      pwmB = constrain(pwmB + yawCorrection - abs(yaw / 2), 0, MAX_PWM);
+        pwmA = constrain(pwmA - yawCorrection - abs(yaw / 2), 0, MAX_PWM);
+        pwmB = constrain(pwmB + yawCorrection - abs(yaw / 2), 0, MAX_PWM);
 
-      // Set motor speeds
-      ledcWrite(speedA, pwmA);
-      ledcWrite(speedB, pwmB);
+        // Set motor speeds
+        ledcWrite(speedA, pwmA);
+        ledcWrite(speedB, pwmB);
 
-      if (currentTime - lastPrintTime >= 1000) {
-        lastPrintTime = currentTime;
-        Serial.print("EnA: ");
-        Serial.print(pulseCountA);
-        Serial.print("\tEnB: ");
-        Serial.print(pulseCountB);
-        Serial.print("\tYaw: ");
-        Serial.print(yaw);
-        Serial.print("\tPWMA: ");
-        Serial.print(pwmA);
-        Serial.print("\tPWMB: ");
-        Serial.print(pwmA);
-        Serial.print("\tvarset: ");
-        Serial.println(varset);
+        if (currentTime - lastPrintTime >= 1000) {
+          lastPrintTime = currentTime;
+          Serial.print("EnA: ");
+          Serial.print(pulseCountA);
+          Serial.print("\tEnB: ");
+          Serial.print(pulseCountB);
+          Serial.print("\tYaw: ");
+          Serial.print(yaw);
+          Serial.print("\tPWMA: ");
+          Serial.print(pwmA);
+          Serial.print("\tPWMB: ");
+          Serial.print(pwmA);
+          Serial.print("\tvarset: ");
+          Serial.println(varset);
+        }
+
+        pulseCountA = 0;
+        pulseCountB = 0;
+    
+        vTaskDelay(50/portTICK_PERIOD_MS);
+        
+        //----------------------------------------------------------
+
+        while(!myRover.enableForward){
+          vTaskDelay(10/portTICK_PERIOD_MS);
+        }
+        myRover.enableForward=false;
+        dlon2_3 = (myRover.gps1.lon - myRover.gps_current.lon) * PI / 180.0;
+        dlat2_3 = (myRover.gps1.lat - myRover.gps_current.lat) * PI / 180.0;
+        a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) +
+                      cos(myRover.gps_current.lat * PI / 180.0) * cos(myRover.gps1.lat * PI / 180.0) *
+                      sin(dlon2_3 / 2) * sin(dlon2_3 / 2);
+        c2_3 = 2 * atan2(sqrt(a2_3), sqrt(1 - a2_3));
+        a = EARTH_RADIUS * c2_3 * 1000;
+
+        Serial.print("Distance : ");
+        Serial.println(a) ;
+
+        if(a > 8){
+          digitalWrite(INA2, 0);
+          digitalWrite(INA1, 0);
+          digitalWrite(INB2, 0);
+          digitalWrite(INB1, 0);
+          ledcWrite(speedA, 0);
+          ledcWrite(speedB, 0);
+
+          myRover.r_status = 4;
+          break;
+        }
       }
-
-      pulseCountA = 0;
-      pulseCountB = 0;
-  
-      vTaskDelay(50/portTICK_PERIOD_MS);
-      
-      //----------------------------------------------------------
-
-      while(!myRover.enableForward){
-        vTaskDelay(10/portTICK_PERIOD_MS);
-      }
-      myRover.enableForward=false;
-      dlon2_3 = (myRover.gps1.lon - myRover.gps_current.lon) * PI / 180.0;
-      dlat2_3 = (myRover.gps1.lat - myRover.gps_current.lat) * PI / 180.0;
-      a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) +
-                    cos(myRover.gps_current.lat * PI / 180.0) * cos(myRover.gps1.lat * PI / 180.0) *
-                    sin(dlon2_3 / 2) * sin(dlon2_3 / 2);
-      c2_3 = 2 * atan2(sqrt(a2_3), sqrt(1 - a2_3));
-      a = EARTH_RADIUS * c2_3 * 1000;
-
-      Serial.print("Distance : ");
-      Serial.println(a) ;
-
-      if(a > 8){
-
-        digitalWrite(INA2, 0);
-        digitalWrite(INA1, 0);
-        digitalWrite(INB2, 0);
-        digitalWrite(INB1, 0);
-        ledcWrite(speedA, 0);
-        ledcWrite(speedB, 0);
-
-        myRover.r_status = 4;
-      }
-      
     }
     if(myRover.r_status == 6)
     {
-      // Tootsoolson ontsogoor ergeh uildel
-      angleInRadians = myRover.rot_angle * (M_PI / 180.0); // Convert degrees to radians
-      arcLength = (angleInRadians / (2 * M_PI)) * (2 * M_PI * r_length); // Arc length formula
-      encoderNum = (int)((80*arcLength)/(2*w_radius*M_PI));
-      
-      digitalWrite(INA2, 0);
-      digitalWrite(INA1, 1);
-      ledcWrite(speedA, 100);
-      pulseCountA=0;
-      Serial.printf("Encoder number: %d\n", encoderNum);
-      // Serial.printf("Pulse count: %d\n", pulseCountA);/
-      while(pulseCountA <= encoderNum)
-      {
-        Serial.printf("Pulse count: %d\n", pulseCountA);
-      }
-      Serial.printf("Pulse count: %d\n", pulseCountA);
-      digitalWrite(INA2, 1);
-      digitalWrite(INA1, 0);
-      ledcWrite(speedA, 255);
-      vTaskDelay((int)(myRover.rot_angle/2)/portTICK_PERIOD_MS);
+      float Gz_r = 0.0;
+      float dt_r = 0.0;
+      float err_r = 0.0;
+      int pwm = 0;
 
-      digitalWrite(INA2, 0);
-      digitalWrite(INA1, 0);
+      float currentYaw = 0.0;
+      float integral = 0;
+      float previousError_r = 0;
+
+      int consecutiveSmallErrors = 0;
+      const int maxConsecutiveSmallErrors = 3;
+      const float errorThreshold = 1.0;
+      const unsigned long settlingTime = 2000;
+      unsigned long settleStartTime = millis();
+
+      unsigned long currentTime_r, previousTime_r;
+      int direction;
+      float error_r;
+      float derivative_r;
+      float controlSignal;
+
+      for (int i = 0; i < 100; i++) {
+        mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+        currentTime_r = millis();
+        dt_r = (currentTime_r - previousTime_r) / 1000.0;
+        previousTime_r = currentTime_r;
+        Gz_r = gz / 131.0;
+        err_r += Gz_r * dt_r;
+
+        vTaskDelay(10/portTICK_PERIOD_MS);
+      }
+      err_r = err_r / 100;
+
+      
+      if (myRover.rot_angle > 0) {
+        
+        while (1) {
+          mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+          currentTime_r = millis();
+          dt_r = (currentTime_r - previousTime_r) / 1000.0;
+          previousTime_r = currentTime_r;
+
+          Gz_r = gz / 131.0;
+
+          currentYaw = currentYaw + (Gz_r * dt_r - err_r);
+
+          direction = (myRover.rot_angle > currentYaw) ? 1 : 0;
+          error_r = myRover.rot_angle - currentYaw;
+
+          if (direction == 1) {
+            digitalWrite(INA2, 1);
+            digitalWrite(INA1, 0);
+
+          } else {
+            digitalWrite(INA2, 0);
+            digitalWrite(INA1, 1);
+          }
+
+          integral += error_r * dt_r;
+          derivative_r = (error_r - previousError_r) / dt_r;
+          controlSignal = 80 + Kp_r * error_r + Ki_r * integral + Kd_r * derivative_r;
+          previousError_r = error_r;
+
+          pwm = constrain(controlSignal, 0, MAX_PWM);
+
+          ledcWrite(speedA, pwm);
+
+          Serial.print("Current Yaw: ");
+          Serial.print(currentYaw);
+          Serial.print("\tDesired Yaw: ");
+          Serial.print(myRover.rot_angle);
+          Serial.print("\tPWM: ");
+          Serial.println(pwm);
+
+          if (abs(error_r) < errorThreshold) {
+            consecutiveSmallErrors++;
+          } else {
+            consecutiveSmallErrors = 0;
+          }
+
+          if (consecutiveSmallErrors >= maxConsecutiveSmallErrors && (currentTime_r - settleStartTime) >= settlingTime)
+          {
+            break;
+          }
+
+          vTaskDelay(10/portTICK_PERIOD_MS);
+        }
+      } 
+      else {
+        while (1) {
+          mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+          currentTime_r = millis();
+          dt_r = (currentTime_r - previousTime_r) / 1000.0;
+          previousTime_r = currentTime_r;
+
+          Gz_r = gz / 131.0;
+
+          currentYaw = currentYaw + (Gz_r * dt_r - err_r);
+
+          direction = (myRover.rot_angle > currentYaw) ? 1 : 0;
+          error_r = abs(myRover.rot_angle) - abs(currentYaw);
+
+          if (direction == 1) {
+            digitalWrite(INB2, 1);
+            digitalWrite(INB1, 0);
+
+          } else {
+            digitalWrite(INB2, 0);
+            digitalWrite(INB1, 1);
+          }
+
+          integral += error_r * dt_r;
+          derivative_r = (error_r - previousError_r) / dt_r;
+          controlSignal = 80 + Kp_r * error_r + Ki_r * integral + Kd_r * derivative_r;
+          previousError_r = error_r;
+
+          pwm = constrain(controlSignal, 0, MAX_PWM);
+
+          ledcWrite(speedB, pwm);
+
+          Serial.print("Current Yaw: ");
+          Serial.print(currentYaw);
+          Serial.print("\tDesired Yaw: ");
+          Serial.print(myRover.rot_angle);
+          Serial.print("\tPWM: ");
+          Serial.println(pwm);
+
+          if (abs(error_r) < errorThreshold) {
+            consecutiveSmallErrors++;
+          } else {
+            consecutiveSmallErrors = 0;
+          }
+
+          if (consecutiveSmallErrors >= maxConsecutiveSmallErrors && (currentTime_r - settleStartTime) >= settlingTime) {
+            break;
+          }
+
+          vTaskDelay(10/portTICK_PERIOD_MS);
+        }
+      }
+
       ledcWrite(speedA, 0);
+      ledcWrite(speedB, 0);
   
       pulseCountA=0;
+      pulseCountB=0;
 
       dlon2_3 = (myRover.gps3.lon - myRover.gps2.lon) * PI / 180.0;
       dlat2_3 = (myRover.gps3.lat - myRover.gps2.lat) * PI / 180.0;
@@ -597,8 +729,11 @@ void Calculate_Angle_task(void *pvParameters)
       }
 
       if(clockwise)
-        myRover.rot_angle = 360 - myRover.rot_angle ;   
+        myRover.rot_angle = 360 - myRover.rot_angle ;  
 
+      if(myRover.rot_angle >180){
+        myRover.rot_angle = myRover.rot_angle -360;
+      }
       Serial.print("Rotate Angle: ");
       Serial.println(myRover.rot_angle);
       myRover.r_status = 6;

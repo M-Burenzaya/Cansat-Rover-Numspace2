@@ -35,7 +35,11 @@ int varset;
 int pwmA = 0, pwmB = 0;
 
 // PID coefficients
+<<<<<<< HEAD
 float Kp = 0.6, Ki = 0.1, Kd = 0.5;
+=======
+float Kp = 1, Ki = 0.4, Kd = 0.5;
+>>>>>>> 32e7fd7d97646b9ade6496e53c9269bc91fea4b4
 
 float integralA = 0, integralB = 0;
 float previousErrorA = 0, previousErrorB = 0;
@@ -113,7 +117,11 @@ void setup() {
 
   // Initial motor directions
   digitalWrite(INA2, 0);
+<<<<<<< HEAD
   digitalWrite(INA1, 0);
+=======
+  digitalWrite(INA1, 1);
+>>>>>>> 32e7fd7d97646b9ade6496e53c9269bc91fea4b4
   digitalWrite(INB2, 0);
   digitalWrite(INB1, 1);
 }
@@ -125,59 +133,88 @@ void loop() {
   
 
   // PID control for motors
-  varset = constrain(abs(setpoint / (0.5 * yaw)), setpoint/3, setpoint);
 
-  int errorA = varset - pulseCountA;
-  integralA += errorA;
-  int derivativeA = errorA - previousErrorA;
-  pwmA = Kp * errorA + Ki * integralA + Kd * derivativeA;
-  previousErrorA = errorA;
+  float Gz = 0.0;
+  float dt = 0.0;
+  float err = 0.0;
 
-  int errorB = varset - pulseCountB;
-  integralB += errorB;
-  int derivativeB = errorB - previousErrorB;
-  pwmB = Kp * errorB + Ki * integralB + Kd * derivativeB;
-  previousErrorB = errorB;
+  for (int i = 0; i < 100; i++) {
+    mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
-  // Yaw correction
+    unsigned long currentTime = millis();
+    dt = (currentTime - previousTime) / 1000.0;
+    previousTime = currentTime;
 
-  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-  float Gz = gz / 131.0;
-  unsigned long currentTime = millis();
-  float dt = (currentTime - previousTime) / 1000.0;
-  previousTime = currentTime;
-  yaw += Gz * dt;
+    Gz = gz / 131.0;
+    err = err + Gz * dt;
 
-  // Corrective action based on yaw
-  float yawCorrection = yawKp * yaw;
-
-  pwmA = constrain(pwmA - yawCorrection - abs(yaw / 2), 0, MAX_PWM);
-  pwmB = constrain(pwmB + yawCorrection - abs(yaw / 2), 0, MAX_PWM);
-
-  // Set motor speeds
-  ledcWrite(speedA, pwmA);
-  ledcWrite(speedB, pwmB);
-
-  if (currentTime - lastPrintTime >= 1000) {
-    lastPrintTime = currentTime;
-    Serial.print("EnA: ");
-    Serial.print(pulseCountA);
-    Serial.print("\tEnB: ");
-    Serial.print(pulseCountB);
-    Serial.print("\tYaw: ");
-    Serial.print(yaw);
-    Serial.print("\tPWMA: ");
-    Serial.print(pwmA);
-    Serial.print("\tPWMB: ");
-    Serial.print(pwmA);
-    Serial.print("\tvarset: ");
-    Serial.println(varset);
+    delay(50);
   }
 
-  pulseCountA = 0;
-  pulseCountB = 0;
+  err = err / 100;
+  Serial.println(err);
 
-  delay(50);
+  while(1) {
+    varset = constrain(abs(setpoint / (0.5 * yaw)), setpoint/3, setpoint);
+
+    //-------------------------------------------------------------------
+
+    mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+    unsigned long currentTime = millis();
+    dt = (currentTime - previousTime) / 1000.0;
+    previousTime = currentTime;
+
+    Gz = gz / 131.0;
+    yaw = yaw + (Gz * dt - err);
+
+    //-------------------------------------------------------------------
+
+    int errorA = varset - pulseCountA;
+    integralA += errorA;
+    int derivativeA = errorA - previousErrorA;
+    pwmA = Kp * errorA + Ki * integralA + Kd * derivativeA;
+    previousErrorA = errorA;
+
+    int errorB = varset - pulseCountB;
+    integralB += errorB;
+    int derivativeB = errorB - previousErrorB;
+    pwmB = Kp * errorB + Ki * integralB + Kd * derivativeB;
+    previousErrorB = errorB;
+
+    //-------------------------------------------------------------------
+
+    // Corrective action based on yaw
+    float yawCorrection = yawKp * yaw;
+
+    pwmA = constrain(pwmA - yawCorrection - abs(yaw / 2), 0, MAX_PWM);
+    pwmB = constrain(pwmB + yawCorrection - abs(yaw / 2), 0, MAX_PWM);
+
+    // Set motor speeds
+    ledcWrite(speedA, pwmA);
+    ledcWrite(speedB, pwmB);
+
+    if (currentTime - lastPrintTime >= 1000) {
+      lastPrintTime = currentTime;
+      Serial.print("EnA: ");
+      Serial.print(pulseCountA);
+      Serial.print("\tEnB: ");
+      Serial.print(pulseCountB);
+      Serial.print("\tYaw: ");
+      Serial.print(yaw);
+      Serial.print("\tPWMA: ");
+      Serial.print(pwmA);
+      Serial.print("\tPWMB: ");
+      Serial.print(pwmA);
+      Serial.print("\tvarset: ");
+      Serial.println(varset);
+    }
+
+    pulseCountA = 0;
+    pulseCountB = 0;
+
+    delay(50);
+  }
 }
 
 // void Motor_task( void *pvParameters )
