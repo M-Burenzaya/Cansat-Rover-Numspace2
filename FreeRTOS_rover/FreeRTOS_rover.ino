@@ -20,6 +20,7 @@ int16_t ax, ay, az;
 int16_t gx, gy, gz;
 
 unsigned long previousTime = 0, lastPrintTime = 0;
+float yaw = 0;
 //----------------------------------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------------------------------
@@ -107,7 +108,6 @@ Rover myRover;
 void IRAM_ATTR encoderPulseA()
 {
   pulseCountA++;
-  
 }
 
 void IRAM_ATTR encoderPulseB()
@@ -319,6 +319,7 @@ void GPS_task(void *pvParameters)
             Serial.print("GPS Current Longitude: ");
             Serial.println(myRover.gps_current.lon, 6);
             myRover.enableForward = true;
+            myRover.r_status = 4;
           }
         }
         if(myRover.r_status == 4)
@@ -331,7 +332,7 @@ void GPS_task(void *pvParameters)
             Serial.println(myRover.gps2.lat, 6);
             Serial.print("GPS 2 Longitude: ");
             Serial.println(myRover.gps2.lon, 6);
-            myRover.r_status = 5; // 5
+            myRover.r_status = 2; // 5
           }
         }
       }
@@ -347,30 +348,19 @@ void Motor_task( void *pvParameters )
 
   //----------------------------------------------------------
 
-  const int MAX_PWM = 255;
-
-  const int freq = 1000;
-  const int speedA = 0;
-  const int speedB = 1;
-  const int resolution = 8;
-
-  unsigned int pulseCountA = 0, pulseCountB = 0;
-
-  //----------------------------------------------------------
-
-  const int setpoint = 30;
+  const int setpoint = 80;
   int varset;
 
   int pwmA = 0, pwmB = 0;
 
   // PID coefficients
-  float Kp = 1, Ki = 0.2, Kd = 0.5;
+  float Kp = 0.5, Ki = 0.05, Kd = 0.8;
 
   float integralA = 0, integralB = 0;
   float previousErrorA = 0, previousErrorB = 0;
 
   // Yaw correction PID coefficients
-  float yawKp = 10.0;
+  float yawKp = 5;
 
   //----------------------------------------------------------
 
@@ -378,13 +368,48 @@ void Motor_task( void *pvParameters )
 
   //-----------------------DISTANCE---------------------------
   double dlon2_3, dlat2_3, a2_3, c2_3, a;
+  //----------------------------------------------------------
+  float Gz = 0.0;
+  float dt = 0.0;
+  float err = 0.0;
+  for (int i = 0; i < 100; i++) {
+    mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
+    unsigned long currentTime = millis();
+    dt = (currentTime - previousTime) / 1000.0;
+    previousTime = currentTime;
+
+    Gz = gz / 131.0;
+    err = err + Gz * dt;
+
+    vTaskDelay(50/portTICK_PERIOD_MS);
+  }
+  err = err / 100;
+  Serial.println(err);
   for(;;)
   {
     if(myRover.r_status == 3)
     {
       //------------------------------------Forward_path----------------------
+      digitalWrite(INA2, 1);
+      digitalWrite(INA1, 0);
+      digitalWrite(INB2, 0);
+      digitalWrite(INB1, 1);
+
       varset = constrain(abs(setpoint / (0.5 * yaw)), setpoint/3, setpoint);
+
+      //-------------------------------------------------------------------
+
+      mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+      unsigned long currentTime = millis();
+      dt = (currentTime - previousTime) / 1000.0;
+      previousTime = currentTime;
+
+      Gz = gz / 131.0;
+      yaw = yaw + (Gz * dt - err);
+
+      //-------------------------------------------------------------------
 
       int errorA = varset - pulseCountA;
       integralA += errorA;
@@ -398,14 +423,7 @@ void Motor_task( void *pvParameters )
       pwmB = Kp * errorB + Ki * integralB + Kd * derivativeB;
       previousErrorB = errorB;
 
-      // Yaw correction
-
-      mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-      float Gz = gz / 131.0;
-      unsigned long currentTime = millis();
-      float dt = (currentTime - previousTime) / 1000.0;
-      previousTime = currentTime;
-      yaw += Gz * dt;
+      //-------------------------------------------------------------------
 
       // Corrective action based on yaw
       float yawCorrection = yawKp * yaw;
@@ -435,24 +453,24 @@ void Motor_task( void *pvParameters )
 
       pulseCountA = 0;
       pulseCountB = 0;
-
+  
       vTaskDelay(50/portTICK_PERIOD_MS);
       
       //----------------------------------------------------------
-      while(!myRover.enableForward){
-        vTaskDelay(10/portTICK_PERIOD_MS);
-      }
-      myRover.enableForward=false;
-      dlon2_3 = (myRover.gps1.lon - myRover.gps_current.lon) * PI / 180.0;
-      dlat2_3 = (myRover.gps1.lat - myRover.gps_current.lat) * PI / 180.0;
-      a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) +
-                    cos(myRover.gps_current.lat * PI / 180.0) * cos(myRover.gps1.lat * PI / 180.0) *
-                    sin(dlon2_3 / 2) * sin(dlon2_3 / 2);
-      c2_3 = 2 * atan2(sqrt(a2_3), sqrt(1 - a2_3));
-      a = EARTH_RADIUS * c2_3 * 1000;
+      // while(!myRover.enableForward){
+      //   vTaskDelay(10/portTICK_PERIOD_MS);
+      // }
+      // myRover.enableForward=false;
+      // dlon2_3 = (myRover.gps1.lon - myRover.gps_current.lon) * PI / 180.0;
+      // dlat2_3 = (myRover.gps1.lat - myRover.gps_current.lat) * PI / 180.0;
+      // a2_3 = sin(dlat2_3 / 2) * sin(dlat2_3 / 2) +
+      //               cos(myRover.gps_current.lat * PI / 180.0) * cos(myRover.gps1.lat * PI / 180.0) *
+      //               sin(dlon2_3 / 2) * sin(dlon2_3 / 2);
+      // c2_3 = 2 * atan2(sqrt(a2_3), sqrt(1 - a2_3));
+      // a = EARTH_RADIUS * c2_3 * 1000;
 
-      Serial.print("Distance : ");
-      Serial.println(a) ;
+      // Serial.print("Distance : ");
+      // Serial.println(a) ;
 
       if(a > 8){
         myRover.r_status = 4;
@@ -504,13 +522,15 @@ void Motor_task( void *pvParameters )
       }
       myRover.r_status = 2 ;
     }
+    if(myRover.r_status != 3 && myRover.r_status != 6 ){
+      vTaskDelay(1000/portTICK_PERIOD_MS);
+    }
     
-    
-    vTaskDelay(1000/portTICK_PERIOD_MS);
   }
 }
 
-void Calculate_Angle_task(void *pvParameters) {
+void Calculate_Angle_task(void *pvParameters)
+{
   bool clockwise; 
   for (;;) {
     if (myRover.r_status == 5) {
@@ -572,7 +592,6 @@ void Calculate_Angle_task(void *pvParameters) {
       Serial.println(myRover.rot_angle);
       myRover.r_status = 7;
     }
-    
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
